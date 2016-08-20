@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <list>
+#include <bits/stdc++.h>
 #include "Color.hpp"
 #include "grow.h"
 
@@ -16,7 +17,7 @@ using namespace cv;
         and input pixel to deal overexposed regions of buoy.
         This function implements CIEDE2000 algorithm to find the distance in color
  */
-bool colorDistance(Vec3b a, Vec3b b, int colorThreshold, int whiteThreshold)
+bool colorDistance(const Vec3b a, const Vec3b b, const int colorThreshold, const int whiteThreshold)
 {
     std::vector<double> ca, cb, cw(3, 255);
 
@@ -40,7 +41,7 @@ bool colorDistance(Vec3b a, Vec3b b, int colorThreshold, int whiteThreshold)
 /*
         Function to modify pixel values at a point as per seed pixel
  */
-void modifyPixel(Mat input, int x, int y, int colorflag)
+void modifyPixel(Mat input, const int x, const int y, const int colorflag)
 {
     Vec3b &colorC = input.at<Vec3b>(x, y);
 
@@ -70,29 +71,11 @@ void modifyPixel(Mat input, int x, int y, int colorflag)
 }
 
 /*
-        Function to encode each pixel based on x and y	
- */
-string intToString(int x, int y)
-{
-    string s = "";
-    stringstream ss;
-
-    ss << x;
-    s += ss.str() + "-";
-    ss.str("");
-    ss << y;
-    s += ss.str();
-
-    return s;
-}
-
-/*
         Constructor sets default values to colorThreshold and whiteThreshold
  */
 grow::grow(int colorThreshold, int whiteThreshold) : colorThreshold(colorThreshold), whiteThreshold(whiteThreshold)
 {
-    //	this->colorThreshold = 20;
-    //	this->whiteThreshold = 10;
+
 }
 
 /*
@@ -103,7 +86,7 @@ grow::grow(int colorThreshold, int whiteThreshold) : colorThreshold(colorThresho
         sY --> Seed Pixel y value
         colorflag --> to determine the color to be filled with
  */
-void grow::start_grow(Mat input, Mat filled, Mat edgeMap, int sX, int sY, int colorflag)
+void grow::start_grow(Mat input, Mat filled, Mat edgeMap, const int sX, const int sY, const int colorflag)
 {
     int x, y;
     long int count = 1;
@@ -111,180 +94,72 @@ void grow::start_grow(Mat input, Mat filled, Mat edgeMap, int sX, int sY, int co
     Vec3b seed = input.at<Vec3b>(sX, sY);
     vector < vector<bool> > reach(input.rows, vector<bool>(input.cols, false));
 
-    list <string> queue;
+    list < pair<int, int> > queue;
 
     reach[sX][sY] = true;
 
     modifyPixel(filled, sX, sY, colorflag);
 
-    s = intToString(sX, sY);
-    queue.push_back(s);
+    queue.push_back(make_pair(sX, sY));
+
+    auto helper_lambda = [&](int lx, int ly)
+        {
+            if (colorDistance(seed, input.at<Vec3b>(lx , ly), colorThreshold, whiteThreshold))
+            {
+                reach[lx][ly] = true;
+                queue.push_back(make_pair(lx, ly));
+                modifyPixel(filled, lx, ly, colorflag);
+                ++count;
+            }
+            else
+                modifyPixel(edgeMap, lx, ly, colorflag);
+        };
 
     while (!queue.empty())
     {
-        s = queue.front();
+        x = queue.front().first;
+        y = queue.front().second;
         queue.pop_front();
-
-        std::size_t pos = s.find('-');
-        stringstream ssx(s.substr(0, pos));
-        stringstream ssy(s.substr(pos + 1));
-        ssx >> x;
-        ssy >> y;
 
         //Right Pixel
         if (x + 1 < input.rows && (!reach[x + 1][y]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x + 1, y), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached right pixel" << endl;
-                reach[x + 1][y] = true;
-                s = intToString(x + 1, y);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x + 1, y), count);
-                modifyPixel(filled, x + 1, y, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x + 1, y, colorflag);
-
-        }
+            helper_lambda(x + 1, y);
 
         //Below Pixel
         if (y + 1 < input.cols && (!reach[x][y + 1]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x, y + 1), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached Below pixel" << endl;
-                reach[x][y + 1] = true;
-                s = intToString(x, y + 1);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x, y + 1), count);
-                modifyPixel(filled, x, y + 1, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x, y + 1, colorflag);
-        }
-
-        //cout << "+++seed Pixel" << endl;
-        //cout << "seed[0] : " << (int)seed[0] << ", seed[1] : " << (int)seed[1] << ", seed[2] = " << (int)seed[2] << endl;
+            helper_lambda(x, y + 1);
 
         //Left Pixel
         if (x - 1 >= 0 && (!reach[x - 1][y]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x - 1, y), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached left pixel" << endl;
-                reach[x - 1][y] = true;
-                s = intToString(x - 1, y);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x - 1, y), count);
-                modifyPixel(filled, x - 1, y, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x - 1, y, colorflag);
-        }
+            helper_lambda(x - 1, y);
 
         //Above Pixel
         if (y - 1 >= 0 && (!reach[x][y - 1]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x, y - 1), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached Above pixel" << endl;
-                reach[x][y - 1] = true;
-                s = intToString(x, y - 1);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x, y - 1), count);
-                modifyPixel(filled, x, y - 1, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x, y - 1, colorflag);
-        }
+            helper_lambda(x, y - 1);
 
         //Bottom Right Pixel
         if (x + 1 < input.rows && y + 1 < input.cols && (!reach[x + 1][y + 1]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x + 1, y + 1), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached Bottom Right pixel" << endl;
-                reach[x + 1][y + 1] = true;
-                s = intToString(x + 1, y + 1);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x + 1, y + 1), count);
-                modifyPixel(filled, x + 1, y + 1, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x + 1, y + 1, colorflag);
-        }
+            helper_lambda(x + 1, y + 1);
 
         //Upper Right Pixel
         if (x + 1 < input.rows && y - 1 >= 0 && (!reach[x + 1][y - 1]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x + 1, y - 1), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached Upper right pixel" << endl;
-                reach[x + 1][y - 1] = true;
-                s = intToString(x + 1, y - 1);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x + 1, y - 1), count);
-                modifyPixel(filled, x + 1, y - 1, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x + 1, y - 1, colorflag);
-        }
+            helper_lambda(x + 1, y - 1);
 
         //Bottom Left Pixel
         if (x - 1 >= 0 && y + 1 < input.cols && (!reach[x - 1][y + 1]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x - 1, y + 1), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached Bottom left pixel" << endl;			
-                reach[x - 1][y + 1] = true;
-                s = intToString(x - 1, y + 1);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x - 1, y + 1), count);
-                modifyPixel(filled, x - 1, y + 1, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x - 1, y + 1, colorflag);
-        }
+            helper_lambda(x - 1, y + 1);
 
         //Upper left Pixel
         if (x - 1 >= 0 && y - 1 >= 0 && (!reach[x - 1][y - 1]))
-        {
-            if (colorDistance(seed, input.at<Vec3b>(x - 1, y - 1), colorThreshold, whiteThreshold))
-            {
-                //cout << "reached Upper left pixel" << endl;
-                reach[x - 1][y - 1] = true;
-                s = intToString(x - 1, y - 1);
-                queue.push_back(s);
-                //updateMean(seed, input.at<Vec3b>(x - 1, y - 1), count);
-                modifyPixel(filled, x - 1, y - 1, colorflag);
-                ++count;
-            }
-            else
-                modifyPixel(edgeMap, x - 1, y - 1, colorflag);
-        }
+            helper_lambda(x - 1, y - 1);
     }
 }
 
 /*
-        Funtion to set both the thresholds	
+        Funtion to set both the thresholds  
  */
-void grow::setThresholds(int colorThreshold, int whiteThreshold)
+void grow::setThresholds(const int colorThreshold, const int whiteThreshold)
 {
     this->colorThreshold = colorThreshold;
     this->whiteThreshold = whiteThreshold;
 }
-/*
-        Destructor
-//*/
-//grow::~grow()
-//{
-//
-//}
